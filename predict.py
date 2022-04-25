@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import spacy
 
 import numpy as np
 import torch
@@ -41,10 +42,18 @@ def load_model(pred_config, args, device):
 def read_input_file(pred_config):
     lines = []
     with open(pred_config.input_file, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            words = line.split()
-            lines.append(words)
+        # modified to read japanese text
+        if pred_config.spacy_model is not None:
+            nlp = spacy.load(pred_config.spacy_model)
+            for line in f:
+                doc = nlp(line)
+                words = [token.text for token in doc if token.text.strip() != ""]
+                lines.append(words)
+        else:
+            for line in f:
+                line = line.strip()
+                words = line.split()
+                lines.append(words)
 
     return lines
 
@@ -222,6 +231,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size for prediction")
     parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available")
+
+    parser.add_argument("--spacy_model",default=None, type=str, help="Spacy model to parse Japanese text", choices=["ja_core_news_lg", "ja_core_news_trf", "ja_ginza_electra"])
 
     pred_config = parser.parse_args()
     predict(pred_config)
