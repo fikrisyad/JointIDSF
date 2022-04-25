@@ -184,7 +184,7 @@ class JointProcessorJapanese(object):
         )
 
 
-processors = {"syllable-level": JointProcessor, "word-level": JointProcessor}
+processors = {"syllable-level": JointProcessor, "word-level": JointProcessorJapanese}
 
 
 def convert_examples_to_features(
