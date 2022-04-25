@@ -2,6 +2,7 @@ import copy
 import json
 import logging
 import os
+import spacy  # for splitting words in Japanese; added by Fikri
 
 import torch
 from torch.utils.data import TensorDataset
@@ -92,6 +93,67 @@ class JointProcessor(object):
             guid = "%s-%s" % (set_type, i)
             # 1. input_text
             words = text.split()  # Some are spaced twice
+            # 2. intent
+            intent_label = (
+                self.intent_labels.index(intent) if intent in self.intent_labels else self.intent_labels.index("UNK")
+            )
+            # 3. slot
+            slot_labels = []
+            for s in slot.split():
+                slot_labels.append(
+                    self.slot_labels.index(s) if s in self.slot_labels else self.slot_labels.index("UNK")
+                )
+
+            assert len(words) == len(slot_labels)
+            examples.append(InputExample(guid=guid, words=words, intent_label=intent_label, slot_labels=slot_labels))
+        return examples
+
+    def get_examples(self, mode):
+        """
+        Args:
+            mode: train, dev, test
+        """
+        data_path = os.path.join(self.args.data_dir, self.args.token_level, mode)
+        logger.info("LOOKING AT {}".format(data_path))
+        return self._create_examples(
+            texts=self._read_file(os.path.join(data_path, self.input_text_file)),
+            intents=self._read_file(os.path.join(data_path, self.intent_label_file)),
+            slots=self._read_file(os.path.join(data_path, self.slot_labels_file)),
+            set_type=mode,
+        )
+
+
+class JointProcessorJapanese(object):
+    """Processor for the JointBERT data set """
+
+    def __init__(self, args):
+        self.args = args
+        self.intent_labels = get_intent_labels(args)
+        self.slot_labels = get_slot_labels(args)
+
+        self.input_text_file = "seq.in"
+        self.intent_label_file = "label"
+        self.slot_labels_file = "seq.out"
+        self.nlp = spacy.load(self.args.spacy_model)
+
+    @classmethod
+    def _read_file(cls, input_file, quotechar=None):
+        """Reads a tab separated value file."""
+        with open(input_file, "r", encoding="utf-8") as f:
+            lines = []
+            for line in f:
+                lines.append(line.strip())
+            return lines
+
+    def _create_examples(self, texts, intents, slots, set_type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for i, (text, intent, slot) in enumerate(zip(texts, intents, slots)):
+            guid = "%s-%s" % (set_type, i)
+            # 1. input_text
+            # words = text.split()  # Some are spaced twice
+            words = self.nlp(text)
+            words = [token.text for token in words if token.text.strip() != ""]
             # 2. intent
             intent_label = (
                 self.intent_labels.index(intent) if intent in self.intent_labels else self.intent_labels.index("UNK")

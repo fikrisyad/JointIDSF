@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
@@ -113,3 +114,15 @@ def get_sentence_frame_acc(intent_preds, intent_labels, slot_preds, slot_labels)
 
     semantic_acc = np.multiply(intent_result, slot_result).mean()
     return {"semantic_frame_acc": semantic_acc}
+
+
+def plot_curve(x_values, y_values, x_label, y_label, plot_labels, plot_title, save_dir="./data"):
+    plt.title(plot_title)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    for y_vals, plot_label in zip(y_values, plot_labels):
+        print("debug", plot_label, len(y_vals))
+        plt.plot(x_values, y_vals, label=plot_label)
+    plt.legend(loc="lower left")
+    plt.savefig(save_dir+"/"+plot_title+'.jpg', bbox_inches='tight')
+    plt.clf()

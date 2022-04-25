@@ -3,12 +3,13 @@ import os
 
 import numpy as np
 import torch
+
 from early_stopping import EarlyStopping
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm, trange
 from transformers import AdamW, get_linear_schedule_with_warmup
-from utils import MODEL_CLASSES, compute_metrics, get_intent_labels, get_slot_labels
+from utils import MODEL_CLASSES, compute_metrics, get_intent_labels, get_slot_labels, plot_curve
 
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,12 @@ class Trainer(object):
         train_iterator = trange(int(self.args.num_train_epochs), desc="Epoch")
         early_stopping = EarlyStopping(patience=self.args.early_stopping, verbose=True)
 
+        # for plotting curve
+        train_losses = []
+        val_losses = []
+        val_intent_acc = []
+        val_slot_f1 = []
+
         for _ in train_iterator:
             epoch_iterator = tqdm(train_dataloader, desc="Iteration", position=0, leave=True)
             print("\nEpoch", _)
@@ -153,10 +160,22 @@ class Trainer(object):
                     epoch_iterator.close()
                     break
 
+            # appending values for learning curve plots
+            train_losses.append(tr_loss / global_step)
+            val_losses.append(results['loss'])
+            val_intent_acc.append(esults['intent_acc'])
+            val_slot_f1.append(results['slot_f1'])
+
             if 0 < self.args.max_steps < global_step or early_stopping.early_stop:
                 train_iterator.close()
                 break
             writer.add_scalar("Loss/train", tr_loss / global_step, _)
+
+        epochs = range(1, int(self.args.num_train_epochs+1))
+        loss_values = [train_losses, val_losses]
+        plot_curve(epochs, loss_values, "Epochs", "Loss", ["train", "val"], "Train Losses", save_dir=self.args.model_dir)
+        plot_curve(epochs, [val_intent_acc], "Epochs", "Accuracy", ["intent acc"], "Intent Accuracy", save_dir=self.args.model_dir)
+        plot_curve(epochs, [val_slot_f1], "Epochs", "F1", ["slot f1"], "Slot F1 score", save_dir=self.args.model_dir)
 
         return global_step, tr_loss / global_step
 

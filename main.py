@@ -133,6 +133,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--use_attention_mask", action="store_true", help="Whether to use attention mask")
 
+    parser.add_argument(
+        "--spacy_model", type=str, help="Spacy model to use for Japanese dataset", 
+        default="ja_core_news_lg",
+        choices=["ja_core_news_lg", "ja_core_news_trf", "ja_ginza_electra"]
+    )
+
     args = parser.parse_args()
 
     args.model_name_or_path = MODEL_PATH_MAP[args.model_type]
