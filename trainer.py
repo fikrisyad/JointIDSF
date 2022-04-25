@@ -163,7 +163,7 @@ class Trainer(object):
             # appending values for learning curve plots
             train_losses.append(tr_loss / global_step)
             val_losses.append(results['loss'])
-            val_intent_acc.append(esults['intent_acc'])
+            val_intent_acc.append(results['intent_acc'])
             val_slot_f1.append(results['slot_f1'])
 
             if 0 < self.args.max_steps < global_step or early_stopping.early_stop:
