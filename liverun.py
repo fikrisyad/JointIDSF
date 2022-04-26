@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from tqdm import tqdm
 from utils import MODEL_CLASSES, get_intent_labels, get_slot_labels, init_logger, load_tokenizer
 
+from annotated_text import annotated_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,21 +41,13 @@ def load_model(pred_config, args, device):
     return model
 
 
-def read_input_file(pred_config):
+def read_input_sentence(pred_config, input_sentence):
     lines = []
-    with open(pred_config.input_file, "r", encoding="utf-8") as f:
-        # modified to read japanese text
-        if pred_config.spacy_model is not None:
-            nlp = spacy.load(pred_config.spacy_model)
-            for line in f:
-                doc = nlp(line)
-                words = [token.text for token in doc if token.text.strip() != ""]
-                lines.append(words)
-        else:
-            for line in f:
-                line = line.strip()
-                words = line.split()
-                lines.append(words)
+    if pred_config.spacy_model is not None:
+        nlp = spacy.load(pred_config.spacy_model)
+        doc = nlp(input_sentence)
+        words = [token.text for token in doc if token.text.strip() != ""]
+        lines.append(words)
 
     return lines
 
@@ -134,32 +128,21 @@ def convert_input_file_to_tensor_dataset(
 
     return dataset
 
-
-def predict(pred_config):
-    # load model and args
-    args = get_args(pred_config)
-    device = get_device(pred_config)
-    model = load_model(pred_config, args, device)
-    logger.info(args)
-
-    intent_label_lst = get_intent_labels(args)
-    slot_label_lst = get_slot_labels(args)
-
-    # Convert input file to TensorDataset
+def predict_output(input_sentence, pred_config, args, model, device, intent_label_lst, slot_label_lst):
+    display_tokens = []
     pad_token_label_id = args.ignore_index
     tokenizer = load_tokenizer(args)
-    lines = read_input_file(pred_config)
-    dataset = convert_input_file_to_tensor_dataset(lines, pred_config, args, tokenizer, pad_token_label_id)
+    lines = read_input_sentence(input_sentence)
+    input = convert_input_file_to_tensor_dataset(lines, pred_config, args, tokenizer, pad_token_label_id)
 
-    # Predict
-    sampler = SequentialSampler(dataset)
-    data_loader = DataLoader(dataset, sampler=sampler, batch_size=pred_config.batch_size)
+    sampler = SequentialSampler(input)
+    data_loader = DataLoader(input, sampler=sampler, batch_size=1)
 
     all_slot_label_mask = None
     intent_preds = None
     slot_preds = None
 
-    for batch in tqdm(data_loader, desc="Predicting"):
+    for batch in data_loader:
         batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
             inputs = {
@@ -168,8 +151,7 @@ def predict(pred_config):
                 "intent_label_ids": None,
                 "slot_labels_ids": None,
             }
-            if args.model_type != "distilbert":
-                inputs["token_type_ids"] = batch[2]
+
             outputs = model(**inputs)
             _, (intent_logits, slot_logits) = outputs[:2]
 
@@ -194,46 +176,50 @@ def predict(pred_config):
                     slot_preds = np.append(slot_preds, slot_logits.detach().cpu().numpy(), axis=0)
                 all_slot_label_mask = np.append(all_slot_label_mask, batch[3].detach().cpu().numpy(), axis=0)
 
-    intent_preds = np.argmax(intent_preds, axis=1)
+        intent_preds = np.argmax(intent_preds, axis=1)
 
-    if not args.use_crf:
-        slot_preds = np.argmax(slot_preds, axis=2)
+        if not args.use_crf:
+            slot_preds = np.argmax(slot_preds, axis=2)
 
-    slot_label_map = {i: label for i, label in enumerate(slot_label_lst)}
-    slot_preds_list = [[] for _ in range(slot_preds.shape[0])]
+        slot_label_map = {i: label for i, label in enumerate(slot_label_lst)}
+        slot_preds_list = [[] for _ in range(slot_preds.shape[0])]
 
-    for i in range(slot_preds.shape[0]):
-        for j in range(slot_preds.shape[1]):
-            if all_slot_label_mask[i, j] != pad_token_label_id:
-                slot_preds_list[i].append(slot_label_map[slot_preds[i][j]])
+        for i in range(slot_preds.shape[0]):
+            for j in range(slot_preds.shape[1]):
+                if all_slot_label_mask[i, j] != pad_token_label_id:
+                    slot_preds_list[i].append(slot_label_map[slot_preds[i][j]])
 
-    # Write to output file
-    with open(pred_config.output_file, "w", encoding="utf-8") as f:
         for words, slot_preds, intent_pred in zip(lines, slot_preds_list, intent_preds):
-            line = ""
+            display_tokens.append("<{}> -> ".format(intent_label_lst[intent_pred]))
             for word, pred in zip(words, slot_preds):
-                if pred == "O":
-                    line = line + word + " "
+                if pred == 'O':
+                    display_tokens.append(word)
                 else:
-                    line = line + "[{}:{}] ".format(word, pred)
-            f.write("<{}> -> {}\n".format(intent_label_lst[intent_pred], line.strip()))
+                    display_tokens.append((word, pred))
+        annotated_text(*display_tokens)
 
-    logger.info("Prediction Done!")
-
-
-if __name__ == "__main__":
+if __name__ = "__main__":
     init_logger()
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--input_file", default="sample_pred_in.txt", type=str, help="Input file for prediction")
-    parser.add_argument("--output_file", default="sample_pred_out.txt", type=str, help="Output file for prediction")
-    parser.add_argument("--model_dir", default="./atis_model", type=str, help="Path to save, load model")
-
-    parser.add_argument("--batch_size", default=32, type=int, help="Batch size for prediction")
-    parser.add_argument("--no_cuda", action="store_true", help="Avoid using CUDA when available")
-
-    parser.add_argument("--spacy_model", default=None, type=str, help="Spacy model to parse Japanese text",
+    parser.add_argument("--spacy_model", default="ja_core_news_trf", type=str,
                         choices=["ja_core_news_lg", "ja_core_news_trf", "ja_ginza_electra"])
+    parser.add_argument("--model_dir", default="./JointIDSF_XLM-Rencoder_ja_trf/3e-5/0.25/10/")
 
     pred_config = parser.parse_args()
-    predict(pred_config)
+
+    torch.cuda.set_device(1)
+    args = get_args(pred_config)
+    device = "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu"
+    model = load_model(pred_config, args, device)
+    logger.info(args)
+
+    intent_label_lst = get_intent_labels(args)
+    slot_label_lst = get_slot_labels(args)
+
+    st.set_page_config(layout="wide")
+    input_sentence = st.text_input("Sentence", value="")
+
+    predict_output(input_sentence, pred_config, args, model, device, intent_label_lst, slot_label_lst)
+
+
