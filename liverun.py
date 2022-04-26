@@ -151,7 +151,8 @@ def predict_output(input_sentence, pred_config, args, model, device, intent_labe
                 "intent_label_ids": None,
                 "slot_labels_ids": None,
             }
-
+            if args.model_type != "distilbert":
+                inputs["token_type_ids"] = batch[2]
             outputs = model(**inputs)
             _, (intent_logits, slot_logits) = outputs[:2]
 
