@@ -13,6 +13,7 @@ from annotated_text import annotated_text
 
 logger = logging.getLogger(__name__)
 
+
 def get_device(pred_config):
     return "cuda" if torch.cuda.is_available() and not pred_config.no_cuda else "cpu"
 
@@ -126,6 +127,7 @@ def convert_input_file_to_tensor_dataset(
 
     return dataset
 
+
 def predict_output(input_sentence, pred_config, args, model, device, intent_label_lst, slot_label_lst):
     display_tokens = []
     pad_token_label_id = args.ignore_index
@@ -196,7 +198,8 @@ def predict_output(input_sentence, pred_config, args, model, device, intent_labe
                     display_tokens.append((word, pred))
         annotated_text(*display_tokens)
 
-if __name__ = "__main__":
+
+if __name__ == "__main__":
     init_logger()
     parser = argparse.ArgumentParser()
 
@@ -219,5 +222,3 @@ if __name__ = "__main__":
     input_sentence = st.text_input("Sentence", value="")
 
     predict_output(input_sentence, pred_config, args, model, device, intent_label_lst, slot_label_lst)
-
-
