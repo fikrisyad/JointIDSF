@@ -132,7 +132,7 @@ def predict_output(input_sentence, pred_config, args, model, device, intent_labe
     display_tokens = []
     pad_token_label_id = args.ignore_index
     tokenizer = load_tokenizer(args)
-    lines = read_input_sentence(input_sentence)
+    lines = read_input_sentence(pred_config, input_sentence)
     input = convert_input_file_to_tensor_dataset(lines, pred_config, args, tokenizer, pad_token_label_id)
 
     sampler = SequentialSampler(input)
