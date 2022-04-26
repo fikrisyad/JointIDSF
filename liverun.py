@@ -7,13 +7,11 @@ import streamlit as st
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
-from tqdm import tqdm
 from utils import MODEL_CLASSES, get_intent_labels, get_slot_labels, init_logger, load_tokenizer
 
 from annotated_text import annotated_text
 
 logger = logging.getLogger(__name__)
-
 
 def get_device(pred_config):
     return "cuda" if torch.cuda.is_available() and not pred_config.no_cuda else "cpu"
